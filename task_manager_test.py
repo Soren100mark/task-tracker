@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import pytest
 
 import task_manager
@@ -88,9 +89,6 @@ def test_createTask_appends_task(tmp_path, monkeypatch):
     # Prepare empty dir and control inputs + datetime
     monkeypatch.chdir(tmp_path)
 
-    inputs = iter(["My new task", "todo"])
-    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: next(inputs))
-
     class DummyDateTimeModule:
         class datetime:
             @staticmethod
@@ -100,8 +98,8 @@ def test_createTask_appends_task(tmp_path, monkeypatch):
 
     monkeypatch.setattr(task_manager, "datetime", DummyDateTimeModule)
 
-    # Call createTask and assert a file was created with expected task
-    task_manager.createTask()
+    # Call createTask with arguments instead of mocking input
+    task_manager.createTask("My new task", "todo")
     with open(tmp_path / "tasks_list.json", "r") as f:
         tasks = json.load(f)
 
@@ -150,25 +148,21 @@ def test_updateTask_interactive_flows(tmp_path, monkeypatch):
     ]
     write_tasks_file(tmp_path, tasks)
 
-    # Update description flow: choose option 1 then provide new description
-    inputs = iter(["1", "changed desc"])
-    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: next(inputs))
-    task_manager.updateTask(0)
+    # Update description flow using CLI args
+    task_manager.updateTask(0, ["--description", "changed desc"])
     with open(tmp_path / "tasks_list.json", "r") as f:
         updated = json.load(f)
     assert updated[0]["description"] == "changed desc"
 
-    # Update status flow: choose option 2 then provide new status
-    inputs = iter(["2", "in-progress"])
-    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: next(inputs))
-    task_manager.updateTask(0)
+    # Update status flow using CLI args
+    task_manager.updateTask(0, ["--status", "in-progress"])
     with open(tmp_path / "tasks_list.json", "r") as f:
         updated = json.load(f)
     assert updated[0]["status"] == "in-progress"
 
 
 def test_createTask_id_collision_demo(tmp_path, monkeypatch):
-    """Demonstrates current behavior: `createTask` uses `len(tasks)` which can collide with existing IDs."""
+    """Tests safe ID allocation: `createTask` uses `max(existing_ids)+1` to avoid collisions."""
     monkeypatch.chdir(tmp_path)
     # Existing tasks with ids 0 and 2 (gap at 1)
     tasks = [
@@ -176,9 +170,6 @@ def test_createTask_id_collision_demo(tmp_path, monkeypatch):
         {"id": 2, "description": "b", "status": "todo", "createdAt": "t", "updatedAt": "t"}
     ]
     write_tasks_file(tmp_path, tasks)
-
-    inputs = iter(["New", "todo"])
-    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: next(inputs))
 
     class DummyDateTimeModule:
         class datetime:
@@ -189,7 +180,7 @@ def test_createTask_id_collision_demo(tmp_path, monkeypatch):
 
     monkeypatch.setattr(task_manager, "datetime", DummyDateTimeModule)
 
-    task_manager.createTask()
+    task_manager.createTask("New", "todo")
     with open(tmp_path / "tasks_list.json", "r") as f:
         after = json.load(f)
 
@@ -201,45 +192,45 @@ def test_createTask_id_collision_demo(tmp_path, monkeypatch):
 
 def test_main_exit_immediately(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    # Provide input '8' to exit immediately
-    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: "8")
+    # Provide sys.argv with help command to show usage
+    monkeypatch.setattr(sys, "argv", ["task_manager.py", "help"])
     task_manager.main()
     out = capsys.readouterr().out
-    assert "Task Manager Menu" in out
-    assert "Exiting Menu" in out
+    assert "Task Manager CLI" in out
 
 
-def test_main_create_and_exit(tmp_path, monkeypatch):
+def test_main_create_command(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    called = {"create": False}
-    def fake_create():
-        called["create"] = True
-    monkeypatch.setattr(task_manager, "createTask", fake_create)
-
-    inputs = iter(["1", "8"])  # choose create, then exit
-    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: next(inputs))
-
+    # Simulate: python task_manager.py create "Test task" todo
+    monkeypatch.setattr(sys, "argv", ["task_manager.py", "create", "Test task", "todo"])
     task_manager.main()
-    assert called["create"] is True
+    
+    # Verify task was created
+    with open(tmp_path / "tasks_list.json", "r") as f:
+        tasks = json.load(f)
+    assert len(tasks) == 1
+    assert tasks[0]["description"] == "Test task"
+    assert tasks[0]["status"] == "todo"
 
 
 def test_main_update_and_delete_flows(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    captured = {}
-
-    def fake_update(id):
-        captured["update_id"] = id
-
-    def fake_delete(id):
-        captured["delete_id"] = id
-
-    monkeypatch.setattr(task_manager, "updateTask", fake_update)
-    monkeypatch.setattr(task_manager, "deleteTask", fake_delete)
-
-    # Sequence: update (2) with id 42, delete (3) with id 99, then exit (8)
-    inputs = iter(["2", "42", "3", "99", "8"])
-    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: next(inputs))
-
+    # Create initial task
+    monkeypatch.setattr(sys, "argv", ["task_manager.py", "create", "Original", "todo"])
     task_manager.main()
-    assert captured.get("update_id") == 42
-    assert captured.get("delete_id") == 99
+    
+    # Update the task
+    monkeypatch.setattr(sys, "argv", ["task_manager.py", "update", "0", "--description", "Updated"])
+    task_manager.main()
+    
+    with open(tmp_path / "tasks_list.json", "r") as f:
+        tasks = json.load(f)
+    assert tasks[0]["description"] == "Updated"
+    
+    # Delete the task
+    monkeypatch.setattr(sys, "argv", ["task_manager.py", "delete", "0"])
+    task_manager.main()
+    
+    with open(tmp_path / "tasks_list.json", "r") as f:
+        tasks = json.load(f)
+    assert len(tasks) == 0

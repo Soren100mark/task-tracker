@@ -2,62 +2,91 @@
 import json
 import datetime
 import os
+import sys
 
 def main():
-    running = True
-    while running:
-        menu()
-        operation = input()
-        match operation:
-            case "1":
-                createTask()
-            case "2":
-                id_to_update = int(input("Please provide the ID for the task you want to update: "))
-                updateTask(id_to_update)
-            case "3":
-                id_to_delete = int(input("Please provide the ID for the task you want to delete: "))
-                deleteTask(id_to_delete)
-            case "4":
+    """Parse CLI arguments and dispatch to appropriate command."""
+    if len(sys.argv) < 2:
+        print_usage()
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        match command:
+            case "create":
+                if len(sys.argv) < 4:
+                    print("Usage: python task_manager.py create <description> <status>")
+                    sys.exit(1)
+                description = sys.argv[2]
+                status = sys.argv[3]
+                createTask(description, status)
+            case "update":
+                if len(sys.argv) < 3:
+                    print("Usage: python task_manager.py update <id> [--description <desc>] [--status <status>]")
+                    sys.exit(1)
+                task_id = int(sys.argv[2])
+                updateTask(task_id, sys.argv[3:])
+            case "delete":
+                if len(sys.argv) < 3:
+                    print("Usage: python task_manager.py delete <id>")
+                    sys.exit(1)
+                task_id = int(sys.argv[2])
+                deleteTask(task_id)
+            case "list":
                 listAllTasks()
-            case "5":
+            case "list-completed":
                 listAllCompleted()
-            case "6":
+            case "list-uncompleted":
                 listAllUncompleted()
-            case "7":
+            case "list-in-progress":
                 listAllInProgress()
-            case "8":
-                print("Exiting Menu...")
-                running = False
+            case "help":
+                print_usage()
+            case _:
+                print(f"Unknown command: {command}")
+                print_usage()
+                sys.exit(1)
+    except ValueError as e:
+        print(f"Error: Invalid argument. {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
-    
 
+def print_usage():
+    """Print usage information."""
+    print("""
+Task Manager CLI
 
-def menu():
-    # Menu with various operations
-    print("----------------------------------------------\n")
-    print("Task Manager Menu\n")
-    print("Select the operation you want to perform: \n")
-    print("(1) Create task")
-    print("(2) Update task")
-    print("(3) Delete task")
-    print("(4) List all tasks")
-    print("(5) List all completed tasks")
-    print("(6) List all uncompleted tasks")
-    print("(7) List all tasks in-progress")
-    print("(8) Exit Menu\n")
-    print("----------------------------------------------")
+Usage:
+  python task_manager.py <command> [options]
 
-def createTask():
+Commands:
+  create <description> <status>          Create a new task
+                                         Status: todo, in-progress, done
+  update <id> [--description <desc>]     Update a task's description
+             [--status <status>]         Update a task's status
+  delete <id>                            Delete a task
+  list                                   List all tasks
+  list-completed                         List all completed tasks
+  list-uncompleted                       List all uncompleted tasks
+  list-in-progress                       List all in-progress tasks
+  help                                   Show this help message
+
+Examples:
+  python task_manager.py create "Buy milk" todo
+  python task_manager.py update 0 --status done
+  python task_manager.py delete 1
+  python task_manager.py list
+""")
+
+def createTask(description, status):
     # Creates task and adds it to task_list
-    print("Enter a description for your task: ")
-    description = input()
-
-    while True:
-        print("Enter a status for your task (todo, in-progress, done): ")
-        status = input()
-        if status in ["todo", "in-progress", "done"]:
-            break
-        print("Invalid input. Please enter a valid status.")
+    # Validate status
+    if status not in ["todo", "in-progress", "done"]:
+        raise ValueError(f"Invalid status '{status}'. Must be: todo, in-progress, or done")
 
     # Get current date and time, then format to strftime
     now = datetime.datetime.now()
@@ -90,26 +119,23 @@ def createTask():
 
     print(f"Task added! (ID: {task['id']})")
 
-def updateTask(id_to_update):
-    # Get task with matching ID, if exists
-    getTaskByID(id_to_update)
+def updateTask(task_id, args):
+    """Update a task by ID with optional --description and --status flags."""
+    if not args:
+        print(f"No updates provided. Usage: python task_manager.py update {task_id} [--description <desc>] [--status <status>]")
+        return
 
-    # Modify selected task
-    # Can only modify description and status
-    modify_key = input("To modify task enter: "
-    "\n(1) To update description"
-    "\n(2) To update status"
-    "\n(3) To exit\n")
-    match modify_key:
-        case "1":
-            new_description = input("Enter your task's new description: ")
-            updateTaskDescription(id_to_update, new_description)
-        case "2":
-            new_status = input("Enter your task's new status (todo, in-progress, done): ")
-            updateStatus(id_to_update, new_status)
-        case "3":
-            print("Exiting...")
-            return
+    # Parse arguments
+    i = 0
+    while i < len(args):
+        if args[i] == "--description" and i + 1 < len(args):
+            updateTaskDescription(task_id, args[i + 1])
+            i += 2
+        elif args[i] == "--status" and i + 1 < len(args):
+            updateStatus(task_id, args[i + 1])
+            i += 2
+        else:
+            i += 1
         
 def listAllTasks():
     tasks = loadTasks()
