@@ -66,7 +66,12 @@ def createTask():
     # Check if file exists and load if it does
     tasks = loadTasks()
 
-    new_id = len(tasks)
+    # Assign a new ID as max(existing ids) + 1 to avoid collisions
+    if tasks:
+        existing_ids = [t.get("id", -1) for t in tasks]
+        new_id = max(existing_ids) + 1
+    else:
+        new_id = 0
 
     task = {
         "id": new_id,
@@ -270,4 +275,5 @@ def loadTasks():
 #-----------------------------------------------------------------------
 
 
-main()
+if __name__ == "__main__":
+    main()
