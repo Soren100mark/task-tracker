@@ -200,9 +200,9 @@ def updateTaskDescription(id, description):
         # Write task with new description
         with open("tasks_list.json", "w") as f:
             json.dump(tasks, f, indent=4)
-        print(f"Task {task["id"]} sucessfully updated.")
+        print(f"Task {task['id']} sucessfully updated.")
     else:
-        print(f"No task found with ID: {task["id"]}")
+        print(f"No task found with ID: {id}")   
 
 def updateStatus(id, status):
     if status != "todo" and status != "in-progress" and status != "done":
