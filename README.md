@@ -69,6 +69,6 @@ python task_manager.py delete 0
 python task_manager.py help
 ```
 
-## Project URL
+## Project
 
-https://github.com/Soren100mark/task-tracker
+This project was completed as part of the [Roadmap.sh](https://roadmap.sh/) Backend pathway. Click here to learn more: https://roadmap.sh/projects/task-tracker
